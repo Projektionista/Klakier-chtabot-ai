@@ -36,7 +36,7 @@ client.once('ready', () => {
 // === Obsługa wiadomości ===
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;               // ignoruj własne wiadomości bota
-  if (!message.content.startsWith('!')) return; // tylko komendy z "!"
+  if (!message.content.startsWith('!k')) return; // tylko komendy z "!"
 
   const prompt = message.content.slice(1).trim();
   const channelId = message.channel.id;
@@ -78,5 +78,6 @@ client.on('messageCreate', async (message) => {
 
 // === Logowanie bota Discord ===
 client.login(process.env.DISCORD_TOKEN);
+
 
 
