@@ -1,28 +1,16 @@
 {
   "name": "klakier-chatbot-ai",
   "version": "1.0.0",
-  "description": "Discord chatbot powered by OpenAI GPT and Discord.js",
+  "description": "Discord bot z ChatGPT działający 24/7 dzięki Express",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.16.3",
+    "discord.js": "^14.15.2",
     "dotenv": "^16.4.5",
-    "openai": "^4.67.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "author": "Projektionista",
-  "license": "MIT",
-  "keywords": [
-    "discord",
-    "bot",
-    "chatgpt",
-    "openai",
-    "ai"
-  ]
+    "openai": "^4.63.0",
+    "express": "^4.21.1"
+  }
 }
-
