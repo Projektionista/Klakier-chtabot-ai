@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
 import OpenAI from 'openai';
 import express from 'express';
+import fetch from 'node-fetch';
 
 // === Express dla Render ===
 const app = express();
@@ -10,6 +11,13 @@ const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => res.send('Bot Discord działa!'));
 app.listen(PORT, () => console.log(`🌐 Serwer HTTP działa na porcie ${PORT}`));
+
+// === Self-ping co 5 minut, żeby bot nie wyłączał się ===
+setInterval(() => {
+  fetch(`http://localhost:${PORT}/`)
+    .then(() => console.log('🔄 Ping wysłany!'))
+    .catch(() => console.log('❌ Ping nieudany'));
+}, 5 * 60 * 1000);
 
 // === Discord + OpenAI konfiguracja ===
 const client = new Client({
@@ -35,7 +43,7 @@ client.on('messageCreate', async (message) => {
   try {
     if (message.author.bot) return; // ignoruj boty
 
-    if (message.content.startsWith('!k')) {
+    if (message.content.startsWith('!')) {
       const prompt = message.content.slice(1).trim();
 
       // Pobierz historię użytkownika lub utwórz nową
