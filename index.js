@@ -1,10 +1,11 @@
 // === Konfiguracja i importy ===
 import 'dotenv/config';
+import express from 'express';
+import fetch from 'node-fetch';
 import { Client, GatewayIntentBits } from 'discord.js';
 import OpenAI from 'openai';
-import express from 'express';
 
-// === Inicjalizacja klienta Discord ===
+// === Inicjalizacja Discord ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -14,22 +15,26 @@ const client = new Client({
 });
 
 // === Konfiguracja OpenAI ===
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// === Express dla self-ping (utrzymanie bota online) ===
+// === Pamięć wiadomości na kanał ===
+const conversationHistory = new Map();
+const repliedMessages = new Set();
+const HISTORY_LIMIT = 20;
+
+// === Uruchomienie Express do self-ping ===
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => res.send('Bot działa!'));
-app.listen(PORT, () => console.log(`Express działa na porcie ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Express działa na porcie ${PORT}`));
 
-// === Pamięć wiadomości, aby nie odpowiadać dwa razy ===
-const repliedMessages = new Set();
-const conversationHistory = new Map(); // {channelId: [{role, content}, ...]}
+// === Funkcja do pingowania samego siebie co 5 minut ===
+setInterval(() => {
+  fetch(`http://localhost:${PORT}/`).catch(() => {});
+}, 5 * 60 * 1000);
 
-// === Gdy bot się uruchomi ===
+// === Gdy bot Discord się uruchomi ===
 client.once('ready', () => {
   console.log(`✅ Zalogowano jako ${client.user.tag}!`);
 });
@@ -37,23 +42,27 @@ client.once('ready', () => {
 // === Obsługa wiadomości ===
 client.on('messageCreate', async (message) => {
   try {
-    // Ignoruj wiadomości bota
-    if (message.author.bot) return;
+    if (message.author.bot) return;           // ignoruj bota
+    if (!message.content.startsWith('!k')) return; // reaguj tylko na !k
+    if (repliedMessages.has(message.id)) return;   // nie odpisuj dwa razy
 
-    // Ignoruj, jeśli już odpowiedzieliśmy na tę wiadomość
-    if (repliedMessages.has(message.id)) return;
     repliedMessages.add(message.id);
 
-    // Reaguj tylko na "!k"
-    if (!message.content.startsWith('!k')) return;
+    const prompt = message.content.slice(2).trim(); // usuwa !k
+    const channelId = message.channel.id;
 
-    const prompt = message.content.slice(2).trim();
-
-    // Przygotuj historię konwersacji
-    let history = conversationHistory.get(message.channel.id) || [];
+    // pobierz historię i dodaj aktualną wiadomość
+    const history = conversationHistory.get(channelId) || [];
     history.push({ role: 'user', content: prompt });
 
-    // Odpowiedź od OpenAI
+    // ogranicz historię do 20 wiadomości
+    if (history.length > HISTORY_LIMIT) {
+      conversationHistory.set(channelId, history.slice(-HISTORY_LIMIT));
+    } else {
+      conversationHistory.set(channelId, history);
+    }
+
+    // generuj odpowiedź
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
@@ -65,15 +74,6 @@ client.on('messageCreate', async (message) => {
     const reply = response.choices[0].message.content;
     await message.reply(reply);
 
-    // Dodaj odpowiedź bota do historii
-    history.push({ role: 'assistant', content: reply });
-    conversationHistory.set(message.channel.id, history);
-
-    // Ograniczenie historii do 10 ostatnich wiadomości
-    if (history.length > 20) {
-      conversationHistory.set(message.channel.id, history.slice(-20));
-    }
-
   } catch (error) {
     console.error('❌ Błąd:', error);
     await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
@@ -82,5 +82,3 @@ client.on('messageCreate', async (message) => {
 
 // === Logowanie bota ===
 client.login(process.env.DISCORD_TOKEN);
-
-
