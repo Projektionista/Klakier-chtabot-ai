@@ -1,54 +1,28 @@
-// === Konfiguracja i importy ===
-import 'dotenv/config';
-import { Client, GatewayIntentBits } from 'discord.js';
-import OpenAI from 'openai';
+{
+  "name": "klakier-chatbot-ai",
+  "version": "1.0.0",
+  "description": "Discord chatbot powered by OpenAI GPT and Discord.js",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "openai": "^4.67.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Projektionista",
+  "license": "MIT",
+  "keywords": [
+    "discord",
+    "bot",
+    "chatgpt",
+    "openai",
+    "ai"
+  ]
+}
 
-// === Inicjalizacja klienta Discord ===
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ],
-});
-
-// === Konfiguracja OpenAI ===
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// === Gdy bot się uruchomi ===
-client.once('ready', () => {
-  console.log(`✅ Zalogowano jako ${client.user.tag}!`);
-});
-
-// === Obsługa wiadomości ===
-client.on('messageCreate', async (message) => {
-  try {
-    // Ignoruj wiadomości bota
-    if (message.author.bot) return;
-
-    // Jeśli wiadomość zaczyna się od "!"
-    if (message.content.startsWith('!')) {
-      const prompt = message.content.slice(1).trim();
-
-      // Odpowiedź od OpenAI
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // możesz zmienić np. na gpt-4o
-        messages: [
-          { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' },
-          { role: 'user', content: prompt }
-        ],
-      });
-
-      const reply = response.choices[0].message.content;
-      await message.reply(reply);
-    }
-  } catch (error) {
-    console.error('❌ Błąd:', error);
-    await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
-  }
-});
-
-// === Logowanie bota ===
-client.login(process.env.DISCORD_TOKEN);
