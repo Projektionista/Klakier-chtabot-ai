@@ -33,47 +33,52 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // === Pamięć rozmów dla każdego użytkownika ===
 const conversations = new Map(); // userId -> [{role, content}, ...]
 
-// === Gdy bot się uruchomi ===
-client.once('ready', () => {
-  console.log(`✅ Zalogowano jako ${client.user.tag}!`);
-});
+// === Zapobiega podwójnym eventom ===
+if (!global.botInitialized) {
+  global.botInitialized = true;
 
-// === Obsługa wiadomości ===
-client.on('messageCreate', async (message) => {
-  try {
-    if (message.author.bot) return; // ignoruj boty
+  // === Gdy bot się uruchomi ===
+  client.once('ready', () => {
+    console.log(`✅ Zalogowano jako ${client.user.tag}!`);
+  });
 
-    if (message.content.startsWith('!k')) {
-      const prompt = message.content.slice(1).trim();
+  // === Obsługa wiadomości ===
+  client.on('messageCreate', async (message) => {
+    try {
+      if (message.author.bot) return; // ignoruj boty
 
-      // Pobierz historię użytkownika lub utwórz nową
-      const history = conversations.get(message.author.id) || [
-        { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' }
-      ];
+      // Reaguj tylko na komendy zaczynające się od "!k"
+      if (message.content.startsWith('!k')) {
+        const prompt = message.content.slice(2).trim(); // wycinamy "!k"
 
-      // Dodaj wiadomość użytkownika
-      history.push({ role: 'user', content: prompt });
+        // Pobierz historię użytkownika lub utwórz nową
+        const history = conversations.get(message.author.id) || [
+          { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' }
+        ];
 
-      // Wywołanie OpenAI
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // możesz zmienić na inny model
-        messages: history,
-      });
+        // Dodaj wiadomość użytkownika
+        history.push({ role: 'user', content: prompt });
 
-      const reply = response.choices[0].message.content;
+        // Wywołanie OpenAI
+        const response = await openai.chat.completions.create({
+          model: 'gpt-4o-mini', // możesz zmienić na inny model
+          messages: history,
+        });
 
-      // Dodaj odpowiedź bota do historii
-      history.push({ role: 'assistant', content: reply });
-      conversations.set(message.author.id, history);
+        const reply = response.choices[0].message.content;
 
-      await message.reply(reply);
+        // Dodaj odpowiedź bota do historii
+        history.push({ role: 'assistant', content: reply });
+        conversations.set(message.author.id, history);
+
+        await message.reply(reply);
+      }
+    } catch (error) {
+      console.error('❌ Błąd:', error);
+      await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
     }
-  } catch (error) {
-    console.error('❌ Błąd:', error);
-    await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
-  }
-});
+  });
+}
 
 // === Logowanie bota ===
 client.login(process.env.DISCORD_TOKEN);
-
