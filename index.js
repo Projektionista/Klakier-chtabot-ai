@@ -61,7 +61,7 @@ if (!global.botInitialized) {
 
         // Wywołanie OpenAI
         const response = await openai.chat.completions.create({
-          model: 'gpt-4o-mini', // możesz zmienić na inny model
+          model: 'gpt-4o-mini',
           messages: history,
         });
 
