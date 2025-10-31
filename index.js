@@ -1,13 +1,17 @@
-// === Konfiguracja i importy ===
+// === Importy ===
 import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
 import OpenAI from 'openai';
 import express from 'express';
 
-// === Pamięć historii rozmów per kanał ===
-const conversationHistory = {};
+// === Express dla Render ===
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// === Inicjalizacja klienta Discord ===
+app.get('/', (req, res) => res.send('Bot Discord działa!'));
+app.listen(PORT, () => console.log(`🌐 Serwer HTTP działa na porcie ${PORT}`));
+
+// === Discord + OpenAI konfiguracja ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -16,68 +20,51 @@ const client = new Client({
   ],
 });
 
-// === Konfiguracja OpenAI ===
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// === Inicjalizacja Express (dla Render / 24/7) ===
-const app = express();
-const PORT = process.env.PORT || 3000;
+// === Pamięć rozmów dla każdego użytkownika ===
+const conversations = new Map(); // userId -> [{role, content}, ...]
 
-app.get('/', (req, res) => res.send('Bot działa!'));
-app.listen(PORT, () => console.log(`🌐 Serwer działa na porcie ${PORT}`));
-
-// === Gdy bot Discord się uruchomi ===
+// === Gdy bot się uruchomi ===
 client.once('ready', () => {
   console.log(`✅ Zalogowano jako ${client.user.tag}!`);
 });
 
 // === Obsługa wiadomości ===
 client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;               // ignoruj własne wiadomości bota
-  if (!message.content.startsWith('!k')) return; // tylko komendy z "!"
-
-  const prompt = message.content.slice(1).trim();
-  const channelId = message.channel.id;
-
-  // Jeśli brak historii dla kanału, inicjalizuj
-  if (!conversationHistory[channelId]) {
-    conversationHistory[channelId] = [
-      { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' }
-    ];
-  }
-
-  // Dodaj wiadomość użytkownika do historii
-  conversationHistory[channelId].push({ role: 'user', content: prompt });
-
   try {
-    // Wywołanie OpenAI z historią
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // możesz zmienić np. na gpt-5-mini
-      messages: conversationHistory[channelId]
-    });
+    if (message.author.bot) return; // ignoruj boty
 
-    const reply = response.choices[0].message.content;
+    if (message.content.startsWith('!k')) {
+      const prompt = message.content.slice(1).trim();
 
-    await message.reply(reply);
+      // Pobierz historię użytkownika lub utwórz nową
+      const history = conversations.get(message.author.id) || [
+        { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' }
+      ];
 
-    // Dodaj odpowiedź bota do historii
-    conversationHistory[channelId].push({ role: 'assistant', content: reply });
+      // Dodaj wiadomość użytkownika
+      history.push({ role: 'user', content: prompt });
 
-    // Przycinanie historii do max 40 wiadomości (20 user + 20 bot)
-    if (conversationHistory[channelId].length > 40) {
-      conversationHistory[channelId] = conversationHistory[channelId].slice(-40);
+      // Wywołanie OpenAI
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini', // możesz zmienić na inny model
+        messages: history,
+      });
+
+      const reply = response.choices[0].message.content;
+
+      // Dodaj odpowiedź bota do historii
+      history.push({ role: 'assistant', content: reply });
+      conversations.set(message.author.id, history);
+
+      await message.reply(reply);
     }
-
   } catch (error) {
     console.error('❌ Błąd:', error);
     await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
   }
 });
 
-// === Logowanie bota Discord ===
+// === Logowanie bota ===
 client.login(process.env.DISCORD_TOKEN);
-
-
-
