@@ -43,7 +43,7 @@ client.on('messageCreate', async (message) => {
   try {
     if (message.author.bot) return; // ignoruj boty
 
-    if (message.content.startsWith('!')) {
+    if (message.content.startsWith('!k')) {
       const prompt = message.content.slice(1).trim();
 
       // Pobierz historię użytkownika lub utwórz nową
@@ -76,3 +76,4 @@ client.on('messageCreate', async (message) => {
 
 // === Logowanie bota ===
 client.login(process.env.DISCORD_TOKEN);
+
