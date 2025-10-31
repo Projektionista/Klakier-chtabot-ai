@@ -59,4 +59,4 @@ client.on('messageCreate', async (message) => {
 });
 
 // === Logowanie bota ===
-client.login(process.env.DISCORD)
+client.login(process.env.DISCORD_TOKEN);
