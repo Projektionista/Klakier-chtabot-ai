@@ -1,25 +1,10 @@
-// === Importy ===
+// === Konfiguracja i importy ===
 import 'dotenv/config';
 import { Client, GatewayIntentBits } from 'discord.js';
 import OpenAI from 'openai';
 import express from 'express';
-import fetch from 'node-fetch';
 
-// === Express dla Render ===
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/', (req, res) => res.send('Bot Discord działa!'));
-app.listen(PORT, () => console.log(`🌐 Serwer HTTP działa na porcie ${PORT}`));
-
-// === Self-ping co 5 minut, żeby bot nie wyłączał się ===
-setInterval(() => {
-  fetch(`http://localhost:${PORT}/`)
-    .then(() => console.log('🔄 Ping wysłany!'))
-    .catch(() => console.log('❌ Ping nieudany'));
-}, 5 * 60 * 1000);
-
-// === Discord + OpenAI konfiguracja ===
+// === Inicjalizacja klienta Discord ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -28,57 +13,74 @@ const client = new Client({
   ],
 });
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// === Konfiguracja OpenAI ===
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-// === Pamięć rozmów dla każdego użytkownika ===
-const conversations = new Map(); // userId -> [{role, content}, ...]
+// === Express dla self-ping (utrzymanie bota online) ===
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// === Zapobiega podwójnym eventom ===
-if (!global.botInitialized) {
-  global.botInitialized = true;
+app.get('/', (req, res) => res.send('Bot działa!'));
+app.listen(PORT, () => console.log(`Express działa na porcie ${PORT}`));
 
-  // === Gdy bot się uruchomi ===
-  client.once('ready', () => {
-    console.log(`✅ Zalogowano jako ${client.user.tag}!`);
-  });
+// === Pamięć wiadomości, aby nie odpowiadać dwa razy ===
+const repliedMessages = new Set();
+const conversationHistory = new Map(); // {channelId: [{role, content}, ...]}
 
-  // === Obsługa wiadomości ===
-  client.on('messageCreate', async (message) => {
-    try {
-      if (message.author.bot) return; // ignoruj boty
+// === Gdy bot się uruchomi ===
+client.once('ready', () => {
+  console.log(`✅ Zalogowano jako ${client.user.tag}!`);
+});
 
-      // Reaguj tylko na komendy zaczynające się od "!k"
-      if (message.content.startsWith('!k')) {
-        const prompt = message.content.slice(2).trim(); // wycinamy "!k"
+// === Obsługa wiadomości ===
+client.on('messageCreate', async (message) => {
+  try {
+    // Ignoruj wiadomości bota
+    if (message.author.bot) return;
 
-        // Pobierz historię użytkownika lub utwórz nową
-        const history = conversations.get(message.author.id) || [
-          { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' }
-        ];
+    // Ignoruj, jeśli już odpowiedzieliśmy na tę wiadomość
+    if (repliedMessages.has(message.id)) return;
+    repliedMessages.add(message.id);
 
-        // Dodaj wiadomość użytkownika
-        history.push({ role: 'user', content: prompt });
+    // Reaguj tylko na "!k"
+    if (!message.content.startsWith('!k')) return;
 
-        // Wywołanie OpenAI
-        const response = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: history,
-        });
+    const prompt = message.content.slice(2).trim();
 
-        const reply = response.choices[0].message.content;
+    // Przygotuj historię konwersacji
+    let history = conversationHistory.get(message.channel.id) || [];
+    history.push({ role: 'user', content: prompt });
 
-        // Dodaj odpowiedź bota do historii
-        history.push({ role: 'assistant', content: reply });
-        conversations.set(message.author.id, history);
+    // Odpowiedź od OpenAI
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Jesteś pomocnym asystentem Discorda.' },
+        ...history
+      ],
+    });
 
-        await message.reply(reply);
-      }
-    } catch (error) {
-      console.error('❌ Błąd:', error);
-      await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
+    const reply = response.choices[0].message.content;
+    await message.reply(reply);
+
+    // Dodaj odpowiedź bota do historii
+    history.push({ role: 'assistant', content: reply });
+    conversationHistory.set(message.channel.id, history);
+
+    // Ograniczenie historii do 10 ostatnich wiadomości
+    if (history.length > 20) {
+      conversationHistory.set(message.channel.id, history.slice(-20));
     }
-  });
-}
+
+  } catch (error) {
+    console.error('❌ Błąd:', error);
+    await message.reply('Wystąpił błąd przy generowaniu odpowiedzi 😢');
+  }
+});
 
 // === Logowanie bota ===
 client.login(process.env.DISCORD_TOKEN);
+
+
